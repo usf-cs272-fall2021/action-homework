@@ -2,7 +2,6 @@ name: GitHub Classroom Workflow
 
 # the autograder action does not have access to environment variables
 # the autograder action does not seem to use the maven cache
-# notice annotations not shown in summary; using warning instead
 
 on:
   push:
@@ -36,53 +35,6 @@ jobs:
         id: autograder
         uses: education/autograding@v1
 
-  # prepare output based on autograder outcome
-  # allows for creation of badges and annotations
-  status:
-    name: Generate Status
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    if: always()
-    needs: build
-    outputs:
-      title: ${{ steps.results.outputs.title }}
-      summary: ${{ steps.results.outputs.summary }}
-      outcome: ${{ steps.results.outputs.outcome }}
-      level: ${{ steps.results.outputs.level }}
-      color: ${{ steps.results.outputs.color }}
-
-    steps:
-      - name: Check Status
-        id: results
-        run: |
-          title="${{ needs.build.outputs.points }} Points"
-          summary="Points: ${{ needs.build.outputs.points }}."
-          outcome="${{ needs.build.outputs.outcome }}"
-          level="warning"
-          color="e3b341"
-          detail="View the \"Run Autograder\" step within the \"Autograding\" job for more information."
-
-          if [[ $outcome == "success" ]]; then
-            level="warning"
-            color="2ea043"
-            summary="${summary} All tests passed! ${detail}"
-            echo "::warning::${summary}"
-          elif [[ $outcome == "failure" ]]; then
-            level="failure"
-            color="f85149"
-            summary="${summary} One or more tests failed. ${detail}"
-            echo "::error::${summary}"
-          else
-            summary="${summary} One or more issues encountered. ${detail}"
-            echo "::error::${summary}"
-          fi
-
-          echo "::set-output name=title::$title"
-          echo "::set-output name=summary::$summary"
-          echo "::set-output name=outcome::$outcome"
-          echo "::set-output name=level::$level"
-          echo "::set-output name=color::$color"
-
   # make points badge for readme
   # https://education.github.community/t/autograder-score-on-readme/66289/2
   # https://github.com/emibcn/badge-action/tree/master#commit-the-changes-to-dedicated-branch
@@ -92,9 +44,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     if: always()
-    needs: [status, build]
+    needs: build
+    outputs:
+      color: ${{ steps.results.outputs.color }}
 
     steps:
+      - name: Check Result
+        id: results
+        run: |
+          outcome="${{ needs.build.outputs.outcome }}"
+          color="f85149"
+
+          if [[ $outcome == "success" ]]; then
+            color="2ea043"
+          fi
+
+          echo "::set-output name=color::$color"
+
       - name: Checkout Homework Repository
         uses: actions/checkout@v2
         with:
@@ -107,11 +73,11 @@ jobs:
           echo "![Points](points.svg)" >> README.md
 
       - name: Generate Points Badge
-        uses: emibcn/badge-action@v1
+        uses: emibcn/badge-action@v1.2.1
         with:
           label: 'Points'
           status: '${{ needs.build.outputs.points }}'
-          color: '${{ needs.status.outputs.color }}'
+          color: '${{ steps.results.outputs.color }}'
           path: 'points.svg'
 
       - name: Push Points Badge
